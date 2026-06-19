@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Relationship Graph</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #1a1d24;
+    --border: #2a2e37;
+    --text: #e6e8ec;
+    --muted: #9aa1ad;
+    --accent: #4f8cff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+  }
+  #sidebar {
+    width: 320px;
+    flex-shrink: 0;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    padding: 16px;
+    overflow-y: auto;
+    transition: width 0.15s ease, padding 0.15s ease;
+    position: relative;
+  }
+  #sidebar.collapsed {
+    width: 0;
+    padding: 16px 0;
+    overflow: hidden;
+    border-right: none;
+  }
+  #sidebarToggleBtn {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 10;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    background: rgba(26,29,36,0.9);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  #sidebarToggleBtn:hover { background: #232730; }
+  #sidebar h2 {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    margin: 24px 0 10px;
+  }
+  #sidebar h2:first-child { margin-top: 0; }
+  #canvasWrap {
+    flex: 1;
+    position: relative;
+    background:
+      radial-gradient(circle at 1px 1px, #232730 1px, transparent 1px) 0 0 / 24px 24px,
+      var(--bg);
+  }
+  svg { width: 100%; height: 100%; display: block; cursor: grab; }
+  svg.panning { cursor: grabbing; }
+
+  button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    width: 100%;
+  }
+  button:hover { background: #3f78e0; }
+  button.secondary {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+  button.secondary:hover { background: #232730; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  input[type="text"], select {
+    width: 100%;
+    background: #11141a;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 7px 8px;
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+  label.field-label {
+    font-size: 12px;
+    color: var(--muted);
+    display: block;
+    margin-bottom: 4px;
+  }
+  input[type="color"] {
+    width: 36px;
+    height: 30px;
+    border: none;
+    border-radius: 6px;
+    background: none;
+    padding: 0;
+    cursor: pointer;
+  }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .row input[type="text"] { margin-bottom: 0; }
+
+  .relType {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    margin-bottom: 4px;
+    font-size: 13px;
+  }
+  .relType .swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .relType .name { flex: 1; }
+  .relType .del {
+    background: none;
+    color: var(--muted);
+    width: auto;
+    padding: 2px 6px;
+    font-size: 14px;
+    line-height: 1;
+  }
+  .relType .del:hover { color: #ff6b6b; background: none; }
+
+  .connRow {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px;
+    margin-bottom: 8px;
+  }
+  .connRow .row { margin-bottom: 6px; }
+  .connRow .del {
+    background: none;
+    color: var(--muted);
+    width: auto;
+    padding: 0 4px;
+  }
+  .connRow .del:hover { color: #ff6b6b; }
+
+  #editNodePanel {
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+    margin-top: 12px;
+  }
+  .existingConnRow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+    font-size: 13px;
+  }
+  .existingConnRow .otherName {
+    flex: 1;
+    color: var(--text);
+  }
+  .existingConnRow select { margin-bottom: 0; flex: 1; }
+  .existingConnRow .del {
+    background: none;
+    color: var(--muted);
+    width: auto;
+    padding: 0 4px;
+  }
+  .existingConnRow .del:hover { color: #ff6b6b; }
+  .dangerBtn { background: #3a1f23; color: #ff8a8a; border: 1px solid #5a2a2f; }
+  .dangerBtn:hover { background: #4a262b; }
+
+  #emptyHint {
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .nodeLabel {
+    fill: var(--text);
+    font-size: 13px;
+    text-anchor: middle;
+    dominant-baseline: middle;
+    pointer-events: none;
+    user-select: none;
+  }
+  .nodeCircle {
+    stroke: #fff;
+    stroke-width: 0;
+    cursor: pointer;
+  }
+  .nodeCircle.selected { stroke: #fff; stroke-width: 3px; }
+  .edgeLine { stroke-width: 2.5; fill: none; }
+  .edgeLabel {
+    font-size: 11px;
+    fill: var(--muted);
+    user-select: none;
+    pointer-events: none;
+  }
+
+  #legend {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    background: rgba(26,29,36,0.9);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 12px;
+    width: 220px;
+  }
+  #legend .relType { font-size: 12px; }
+  #legend h3 {
+    margin: 0 0 6px;
+    font-size: 11px;
+    text-transform: uppercase;
+    color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+  #legend input[type="text"] { margin-bottom: 0; }
+  #legend button { font-size: 12px; padding: 6px 10px; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <h2>Relationship Types</h2>
+  <div id="relTypeList"></div>
+  <div class="row" style="margin-top:10px;">
+    <input type="color" id="newRelColor" value="#4f8cff">
+    <input type="text" id="newRelName" placeholder="e.g. Friend, Sibling...">
+  </div>
+  <button id="addRelTypeBtn">Add Relationship Type</button>
+
+  <h2>Data</h2>
+  <div class="row">
+    <button class="secondary" id="saveBtn">Save</button>
+    <button class="secondary" id="loadBtn">Load</button>
+  </div>
+  <div class="row" style="margin-top:8px;">
+    <button class="secondary" id="exportBtn">Export File</button>
+    <button class="secondary" id="importBtn">Import File</button>
+  </div>
+  <input type="file" id="importFileInput" accept="application/json" style="display:none;">
+  <div id="saveStatus" style="font-size:12px; color:var(--muted); margin-top:6px; min-height:16px;"></div>
+
+  <h2>Nodes</h2>
+  <button id="addNodeBtn">+ Add Node</button>
+  <div id="addNodeForm" style="display:none; margin-top:10px;">
+    <label class="field-label">Name</label>
+    <input type="text" id="newNodeName" placeholder="Person's name">
+    <label class="field-label">Connections</label>
+    <div id="connList"></div>
+    <button class="secondary" id="addConnRowBtn" type="button">+ Connect to existing node</button>
+    <div class="row" style="margin-top:10px;">
+      <button id="confirmAddNodeBtn">Add</button>
+      <button class="secondary" id="cancelAddNodeBtn">Cancel</button>
+    </div>
+  </div>
+  <div id="emptyHint" style="margin-top:10px;">
+    Click a node to select it, then drag to reposition. Click "Add Node" to create a new person and connect them to existing nodes.
+  </div>
+
+  <div id="editNodePanel" style="display:none;">
+    <h2 style="margin-top:0;">Edit Node</h2>
+    <label class="field-label">Name</label>
+    <input type="text" id="editNodeName" placeholder="Person's name">
+
+    <label class="field-label">Connections</label>
+    <div id="existingConnList"></div>
+
+    <div class="connRow">
+      <div class="row">
+        <select id="newExistingConnNode"></select>
+      </div>
+      <select id="newExistingConnRel"></select>
+      <button class="secondary" id="addExistingConnBtn" type="button" style="margin-top:6px;">+ Add Connection</button>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <button class="dangerBtn" id="deleteNodeBtn">Delete Node</button>
+      <button class="secondary" id="deselectNodeBtn">Done</button>
+    </div>
+  </div>
+</div>
+
+<div id="canvasWrap">
+  <svg id="graph"></svg>
+  <div id="legend" style="display:none;">
+    <h3>Legend</h3>
+    <div id="legendList"></div>
+    <label style="display:flex; align-items:center; gap:6px; margin-top:8px; cursor:pointer;">
+      <input type="checkbox" id="toggleLabelsCheckbox" checked style="width:auto; margin:0;">
+      <span>Show labels on lines</span>
+    </label>
+  </div>
+  <button id="sidebarToggleBtn" title="Show sidebar">&#9776;</button>
+</div>
+
+<script>
+(function () {
+  const svg = document.getElementById('graph');
+  const relTypeList = document.getElementById('relTypeList');
+  const newRelName = document.getElementById('newRelName');
+  const newRelColor = document.getElementById('newRelColor');
+  const addRelTypeBtn = document.getElementById('addRelTypeBtn');
+  const addNodeBtn = document.getElementById('addNodeBtn');
+  const addNodeForm = document.getElementById('addNodeForm');
+  const newNodeName = document.getElementById('newNodeName');
+  const connList = document.getElementById('connList');
+  const addConnRowBtn = document.getElementById('addConnRowBtn');
+  const confirmAddNodeBtn = document.getElementById('confirmAddNodeBtn');
+  const cancelAddNodeBtn = document.getElementById('cancelAddNodeBtn');
+  const legend = document.getElementById('legend');
+  const legendList = document.getElementById('legendList');
+  const toggleLabelsCheckbox = document.getElementById('toggleLabelsCheckbox');
+  const sidebar = document.getElementById('sidebar');
+  const sidebarToggleBtn = document.getElementById('sidebarToggleBtn');
+  const emptyHint = document.getElementById('emptyHint');
+  const editNodePanel = document.getElementById('editNodePanel');
+  const editNodeName = document.getElementById('editNodeName');
+  const existingConnList = document.getElementById('existingConnList');
+  const newExistingConnNode = document.getElementById('newExistingConnNode');
+  const newExistingConnRel = document.getElementById('newExistingConnRel');
+  const addExistingConnBtn = document.getElementById('addExistingConnBtn');
+  const deleteNodeBtn = document.getElementById('deleteNodeBtn');
+  const deselectNodeBtn = document.getElementById('deselectNodeBtn');
+  const saveBtn = document.getElementById('saveBtn');
+  const loadBtn = document.getElementById('loadBtn');
+  const exportBtn = document.getElementById('exportBtn');
+  const importBtn = document.getElementById('importBtn');
+  const importFileInput = document.getElementById('importFileInput');
+  const saveStatus = document.getElementById('saveStatus');
+  const STORAGE_KEY = 'relationshipGraphData';
+
+  let state = {
+    nodes: [],   // {id, name, x, y}
+    edges: [],   // {from, to, relTypeId}
+    relTypes: [] // {id, name, color}
+  };
+  let nextId = 1;
+  let selectedNodeId = null;
+  let drag = null; // {nodeId, offsetX, offsetY}
+  let labelsVisible = true;
+
+  function uid() { return nextId++; }
+
+  function defaultRelTypes() {
+    return [
+      { id: uid(), name: 'Friend', color: '#4f8cff' },
+      { id: uid(), name: 'Family', color: '#ff8a4f' },
+      { id: uid(), name: 'Colleague', color: '#4fd17b' }
+    ];
+  }
+
+  function init() {
+    if (loadFromStorage(true)) {
+      renderAll();
+      return;
+    }
+    state.relTypes = defaultRelTypes();
+    const wrap = document.getElementById('canvasWrap');
+    state.nodes.push({
+      id: uid(),
+      name: 'You',
+      x: wrap.clientWidth / 2,
+      y: wrap.clientHeight / 2
+    });
+    renderAll();
+  }
+
+  // ---------- Save / Load ----------
+
+  function showStatus(msg) {
+    saveStatus.textContent = msg;
+    setTimeout(() => { if (saveStatus.textContent === msg) saveStatus.textContent = ''; }, 2500);
+  }
+
+  function serializeState() {
+    return JSON.stringify({ nodes: state.nodes, edges: state.edges, relTypes: state.relTypes, nextId }, null, 2);
+  }
+
+  function applyLoadedData(data) {
+    if (!data || !Array.isArray(data.nodes) || !Array.isArray(data.edges) || !Array.isArray(data.relTypes)) {
+      throw new Error('Invalid data format');
+    }
+    state.nodes = data.nodes;
+    state.edges = data.edges;
+    state.relTypes = data.relTypes;
+    nextId = typeof data.nextId === 'number' ? data.nextId : (
+      Math.max(0, ...data.nodes.map(n => n.id), ...data.relTypes.map(r => r.id)) + 1
+    );
+    selectedNodeId = null;
+  }
+
+  function loadFromStorage(silent) {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      if (!silent) showStatus('No saved data found.');
+      return false;
+    }
+    try {
+      applyLoadedData(JSON.parse(raw));
+      if (!silent) showStatus('Loaded.');
+      return true;
+    } catch (err) {
+      if (!silent) alert('Could not load saved data: ' + err.message);
+      return false;
+    }
+  }
+
+  saveBtn.addEventListener('click', () => {
+    localStorage.setItem(STORAGE_KEY, serializeState());
+    showStatus('Saved.');
+  });
+
+  loadBtn.addEventListener('click', () => {
+    if (loadFromStorage(false)) renderAll();
+  });
+
+  exportBtn.addEventListener('click', () => {
+    const blob = new Blob([serializeState()], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'relationship-graph.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  });
+
+  importBtn.addEventListener('click', () => importFileInput.click());
+
+  importFileInput.addEventListener('change', () => {
+    const file = importFileInput.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        applyLoadedData(JSON.parse(reader.result));
+        renderAll();
+        showStatus('Imported.');
+      } catch (err) {
+        alert('Could not import file: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+    importFileInput.value = '';
+  });
+
+  // ---------- Relationship Types ----------
+
+  function renderRelTypes() {
+    relTypeList.innerHTML = '';
+    state.relTypes.forEach(rt => {
+      const row = document.createElement('div');
+      row.className = 'relType';
+      row.innerHTML = `
+        <span class="swatch" style="background:${rt.color}"></span>
+        <span class="name">${escapeHtml(rt.name)}</span>
+        <button class="del" title="Remove" data-id="${rt.id}">&times;</button>
+      `;
+      row.querySelector('.del').addEventListener('click', () => removeRelType(rt.id));
+      relTypeList.appendChild(row);
+    });
+  }
+
+  function removeRelType(id) {
+    if (state.edges.some(e => e.relTypeId === id)) {
+      if (!confirm('Some relationships use this type. Remove it and delete those connections?')) return;
+      state.edges = state.edges.filter(e => e.relTypeId !== id);
+    }
+    state.relTypes = state.relTypes.filter(rt => rt.id !== id);
+    renderAll();
+  }
+
+  addRelTypeBtn.addEventListener('click', () => {
+    const name = newRelName.value.trim();
+    if (!name) { newRelName.focus(); return; }
+    state.relTypes.push({ id: uid(), name, color: newRelColor.value });
+    newRelName.value = '';
+    newRelColor.value = '#4f8cff';
+    renderAll();
+  });
+
+  // ---------- Add Node Flow ----------
+
+  addNodeBtn.addEventListener('click', () => {
+    addNodeForm.style.display = 'block';
+    connList.innerHTML = '';
+    newNodeName.value = '';
+    if (state.nodes.length && state.relTypes.length) addConnRow();
+    newNodeName.focus();
+  });
+
+  cancelAddNodeBtn.addEventListener('click', closeAddNodeForm);
+
+  function closeAddNodeForm() {
+    addNodeForm.style.display = 'none';
+    connList.innerHTML = '';
+  }
+
+  function addConnRow() {
+    if (!state.nodes.length) return;
+    if (!state.relTypes.length) {
+      alert('Add a relationship type first.');
+      return;
+    }
+    const row = document.createElement('div');
+    row.className = 'connRow';
+    const nodeOptions = state.nodes.map(n => `<option value="${n.id}">${escapeHtml(n.name)}</option>`).join('');
+    const relOptions = state.relTypes.map(rt => `<option value="${rt.id}">${escapeHtml(rt.name)}</option>`).join('');
+    row.innerHTML = `
+      <div class="row">
+        <select class="connNode">${nodeOptions}</select>
+        <button type="button" class="del">&times;</button>
+      </div>
+      <select class="connRel">${relOptions}</select>
+    `;
+    row.querySelector('.del').addEventListener('click', () => row.remove());
+    connList.appendChild(row);
+  }
+
+  addConnRowBtn.addEventListener('click', addConnRow);
+
+  confirmAddNodeBtn.addEventListener('click', () => {
+    const name = newNodeName.value.trim();
+    if (!name) { newNodeName.focus(); return; }
+
+    const wrap = document.getElementById('canvasWrap');
+    const newNode = {
+      id: uid(),
+      name,
+      x: wrap.clientWidth / 2 + (Math.random() - 0.5) * 200,
+      y: wrap.clientHeight / 2 + (Math.random() - 0.5) * 200
+    };
+
+    const rows = Array.from(connList.querySelectorAll('.connRow'));
+    const newEdges = [];
+    for (const row of rows) {
+      const targetId = parseInt(row.querySelector('.connNode').value, 10);
+      const relTypeId = parseInt(row.querySelector('.connRel').value, 10);
+      if (!isNaN(targetId) && !isNaN(relTypeId)) {
+        newEdges.push({ from: newNode.id, to: targetId, relTypeId });
+      }
+    }
+
+    state.nodes.push(newNode);
+    state.edges.push(...newEdges);
+    closeAddNodeForm();
+    renderAll();
+  });
+
+  // ---------- Rendering ----------
+
+  function escapeHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function relTypeById(id) {
+    return state.relTypes.find(rt => rt.id === id);
+  }
+
+  function nodeById(id) {
+    return state.nodes.find(n => n.id === id);
+  }
+
+  function renderLegend() {
+    if (!state.relTypes.length) { legend.style.display = 'none'; return; }
+    legend.style.display = 'block';
+    legendList.innerHTML = '';
+    state.relTypes.forEach(rt => {
+      const row = document.createElement('div');
+      row.className = 'relType';
+      row.innerHTML = `<span class="swatch" style="background:${rt.color}"></span><span class="name">${escapeHtml(rt.name)}</span>`;
+      legendList.appendChild(row);
+    });
+  }
+
+  toggleLabelsCheckbox.addEventListener('change', () => {
+    labelsVisible = toggleLabelsCheckbox.checked;
+    renderGraph();
+  });
+
+  sidebarToggleBtn.addEventListener('click', () => {
+    sidebar.classList.toggle('collapsed');
+    const collapsed = sidebar.classList.contains('collapsed');
+    sidebarToggleBtn.title = collapsed ? 'Show sidebar' : 'Hide sidebar';
+  });
+
+  function renderGraph() {
+    svg.innerHTML = '';
+
+    const edgesGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    const nodesGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+
+    state.edges.forEach(edge => {
+      const from = nodeById(edge.from);
+      const to = nodeById(edge.to);
+      if (!from || !to) return;
+      const rt = relTypeById(edge.relTypeId);
+      const color = rt ? rt.color : '#888';
+
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', from.x);
+      line.setAttribute('y1', from.y);
+      line.setAttribute('x2', to.x);
+      line.setAttribute('y2', to.y);
+      line.setAttribute('class', 'edgeLine');
+      line.setAttribute('stroke', color);
+      edgesGroup.appendChild(line);
+
+      if (rt && labelsVisible) {
+        const mx = (from.x + to.x) / 2;
+        const my = (from.y + to.y) / 2;
+        const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        label.setAttribute('x', mx);
+        label.setAttribute('y', my - 6);
+        label.setAttribute('class', 'edgeLabel');
+        label.setAttribute('text-anchor', 'middle');
+        label.textContent = rt.name;
+        edgesGroup.appendChild(label);
+      }
+    });
+
+    state.nodes.forEach(node => {
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+
+      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      circle.setAttribute('cx', node.x);
+      circle.setAttribute('cy', node.y);
+      circle.setAttribute('r', 32);
+      circle.setAttribute('fill', '#2d3340');
+      circle.setAttribute('class', 'nodeCircle' + (node.id === selectedNodeId ? ' selected' : ''));
+      circle.addEventListener('mousedown', (e) => startDrag(e, node));
+      circle.addEventListener('click', () => selectNode(node.id));
+
+      const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      label.setAttribute('x', node.x);
+      label.setAttribute('y', node.y);
+      label.setAttribute('class', 'nodeLabel');
+      label.textContent = node.name;
+
+      g.appendChild(circle);
+      g.appendChild(label);
+      nodesGroup.appendChild(g);
+    });
+
+    svg.appendChild(edgesGroup);
+    svg.appendChild(nodesGroup);
+  }
+
+  function renderAll() {
+    renderRelTypes();
+    renderLegend();
+    renderGraph();
+    renderEditNodePanel();
+  }
+
+  // ---------- Edit / Delete Node ----------
+
+  function selectNode(id) {
+    selectedNodeId = id;
+    renderAll();
+  }
+
+  function renderEditNodePanel() {
+    const node = nodeById(selectedNodeId);
+    if (!node) {
+      editNodePanel.style.display = 'none';
+      emptyHint.style.display = 'block';
+      return;
+    }
+    editNodePanel.style.display = 'block';
+    emptyHint.style.display = 'none';
+
+    editNodeName.value = node.name;
+
+    const others = state.nodes.filter(n => n.id !== node.id);
+
+    existingConnList.innerHTML = '';
+    const touching = state.edges
+      .map((e, idx) => ({ e, idx }))
+      .filter(({ e }) => e.from === node.id || e.to === node.id);
+
+    if (!touching.length) {
+      const none = document.createElement('div');
+      none.style.color = 'var(--muted)';
+      none.style.fontSize = '13px';
+      none.style.marginBottom = '8px';
+      none.textContent = 'No connections yet.';
+      existingConnList.appendChild(none);
+    }
+
+    touching.forEach(({ e, idx }) => {
+      const otherId = e.from === node.id ? e.to : e.from;
+      const other = nodeById(otherId);
+      if (!other) return;
+
+      const row = document.createElement('div');
+      row.className = 'existingConnRow';
+
+      const relOptions = state.relTypes.map(rt =>
+        `<option value="${rt.id}" ${rt.id === e.relTypeId ? 'selected' : ''}>${escapeHtml(rt.name)}</option>`
+      ).join('');
+
+      row.innerHTML = `
+        <span class="otherName">${escapeHtml(other.name)}</span>
+        <select class="relSelect">${relOptions}</select>
+        <button type="button" class="del" title="Remove connection">&times;</button>
+      `;
+
+      row.querySelector('.relSelect').addEventListener('change', (ev) => {
+        state.edges[idx].relTypeId = parseInt(ev.target.value, 10);
+        renderGraph();
+      });
+      row.querySelector('.del').addEventListener('click', () => {
+        state.edges.splice(idx, 1);
+        renderAll();
+      });
+
+      existingConnList.appendChild(row);
+    });
+
+    if (others.length && state.relTypes.length) {
+      newExistingConnNode.parentElement.parentElement.style.display = '';
+      newExistingConnNode.innerHTML = others.map(n => `<option value="${n.id}">${escapeHtml(n.name)}</option>`).join('');
+      newExistingConnRel.innerHTML = state.relTypes.map(rt => `<option value="${rt.id}">${escapeHtml(rt.name)}</option>`).join('');
+    } else {
+      newExistingConnNode.parentElement.parentElement.style.display = 'none';
+    }
+  }
+
+  editNodeName.addEventListener('input', () => {
+    const node = nodeById(selectedNodeId);
+    if (!node) return;
+    node.name = editNodeName.value;
+    renderGraph();
+    renderEditNodePanel();
+  });
+
+  addExistingConnBtn.addEventListener('click', () => {
+    const node = nodeById(selectedNodeId);
+    if (!node) return;
+    const targetId = parseInt(newExistingConnNode.value, 10);
+    const relTypeId = parseInt(newExistingConnRel.value, 10);
+    if (isNaN(targetId) || isNaN(relTypeId)) return;
+    const exists = state.edges.some(e =>
+      (e.from === node.id && e.to === targetId) || (e.from === targetId && e.to === node.id)
+    );
+    if (exists) {
+      alert('A connection between these two nodes already exists. Remove it first if you want to change it.');
+      return;
+    }
+    state.edges.push({ from: node.id, to: targetId, relTypeId });
+    renderAll();
+  });
+
+  deleteNodeBtn.addEventListener('click', () => {
+    const node = nodeById(selectedNodeId);
+    if (!node) return;
+    if (!confirm(`Delete "${node.name}" and all its connections?`)) return;
+    state.nodes = state.nodes.filter(n => n.id !== node.id);
+    state.edges = state.edges.filter(e => e.from !== node.id && e.to !== node.id);
+    selectedNodeId = null;
+    renderAll();
+  });
+
+  deselectNodeBtn.addEventListener('click', () => {
+    selectedNodeId = null;
+    renderAll();
+  });
+
+  // ---------- Dragging ----------
+
+  function startDrag(e, node) {
+    e.preventDefault();
+    const rect = svg.getBoundingClientRect();
+    drag = {
+      nodeId: node.id,
+      offsetX: e.clientX - rect.left - node.x,
+      offsetY: e.clientY - rect.top - node.y
+    };
+    svg.classList.add('panning');
+  }
+
+  svg.addEventListener('mousemove', (e) => {
+    if (!drag) return;
+    const node = nodeById(drag.nodeId);
+    if (!node) return;
+    const rect = svg.getBoundingClientRect();
+    node.x = e.clientX - rect.left - drag.offsetX;
+    node.y = e.clientY - rect.top - drag.offsetY;
+    renderGraph();
+  });
+
+  window.addEventListener('mouseup', () => {
+    drag = null;
+    svg.classList.remove('panning');
+  });
+
+  window.addEventListener('resize', renderGraph);
+
+  init();
+})();
+</script>
+</body>
+</html>
