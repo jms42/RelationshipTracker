@@ -135,6 +135,19 @@
     border-radius: 50%;
     flex-shrink: 0;
   }
+  .relType .swatchPicker {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: none;
+    cursor: pointer;
+    overflow: hidden;
+  }
+  .relType .swatchPicker::-webkit-color-swatch-wrapper { padding: 0; }
+  .relType .swatchPicker::-webkit-color-swatch { border: none; border-radius: 50%; }
   .relType .name { flex: 1; }
   .relType .del {
     background: none;
@@ -284,6 +297,9 @@
     <label class="field-label">Name</label>
     <input type="text" id="editNodeName" placeholder="Person's name">
 
+    <label class="field-label">Node Color</label>
+    <input type="color" id="editNodeColor" style="margin-bottom:8px;">
+
     <label class="field-label">Connections</label>
     <div id="existingConnList"></div>
 
@@ -337,6 +353,7 @@
   const emptyHint = document.getElementById('emptyHint');
   const editNodePanel = document.getElementById('editNodePanel');
   const editNodeName = document.getElementById('editNodeName');
+  const editNodeColor = document.getElementById('editNodeColor');
   const existingConnList = document.getElementById('existingConnList');
   const newExistingConnNode = document.getElementById('newExistingConnNode');
   const newExistingConnRel = document.getElementById('newExistingConnRel');
@@ -350,9 +367,10 @@
   const importFileInput = document.getElementById('importFileInput');
   const saveStatus = document.getElementById('saveStatus');
   const STORAGE_KEY = 'relationshipGraphData';
+  const DEFAULT_NODE_COLOR = '#2d3340';
 
   let state = {
-    nodes: [],   // {id, name, x, y}
+    nodes: [],   // {id, name, x, y, color}
     edges: [],   // {from, to, relTypeId}
     relTypes: [] // {id, name, color}
   };
@@ -382,7 +400,8 @@
       id: uid(),
       name: 'You',
       x: wrap.clientWidth / 2,
-      y: wrap.clientHeight / 2
+      y: wrap.clientHeight / 2,
+      color: DEFAULT_NODE_COLOR
     });
     renderAll();
   }
@@ -475,10 +494,15 @@
       const row = document.createElement('div');
       row.className = 'relType';
       row.innerHTML = `
-        <span class="swatch" style="background:${rt.color}"></span>
+        <input type="color" class="swatchPicker" value="${rt.color}" title="Change color">
         <span class="name">${escapeHtml(rt.name)}</span>
         <button class="del" title="Remove" data-id="${rt.id}">&times;</button>
       `;
+      row.querySelector('.swatchPicker').addEventListener('input', (ev) => {
+        rt.color = ev.target.value;
+        renderGraph();
+        renderLegend();
+      });
       row.querySelector('.del').addEventListener('click', () => removeRelType(rt.id));
       relTypeList.appendChild(row);
     });
@@ -551,7 +575,8 @@
       id: uid(),
       name,
       x: wrap.clientWidth / 2 + (Math.random() - 0.5) * 200,
-      y: wrap.clientHeight / 2 + (Math.random() - 0.5) * 200
+      y: wrap.clientHeight / 2 + (Math.random() - 0.5) * 200,
+      color: DEFAULT_NODE_COLOR
     };
 
     const rows = Array.from(connList.querySelectorAll('.connRow'));
@@ -593,7 +618,12 @@
     state.relTypes.forEach(rt => {
       const row = document.createElement('div');
       row.className = 'relType';
-      row.innerHTML = `<span class="swatch" style="background:${rt.color}"></span><span class="name">${escapeHtml(rt.name)}</span>`;
+      row.innerHTML = `<input type="color" class="swatchPicker" value="${rt.color}" title="Change color"><span class="name">${escapeHtml(rt.name)}</span>`;
+      row.querySelector('.swatchPicker').addEventListener('input', (ev) => {
+        rt.color = ev.target.value;
+        renderGraph();
+        renderRelTypes();
+      });
       legendList.appendChild(row);
     });
   }
@@ -651,7 +681,7 @@
       circle.setAttribute('cx', node.x);
       circle.setAttribute('cy', node.y);
       circle.setAttribute('r', 32);
-      circle.setAttribute('fill', '#2d3340');
+      circle.setAttribute('fill', node.color || DEFAULT_NODE_COLOR);
       circle.setAttribute('class', 'nodeCircle' + (node.id === selectedNodeId ? ' selected' : ''));
       circle.addEventListener('mousedown', (e) => startDrag(e, node));
       circle.addEventListener('click', () => selectNode(node.id));
@@ -696,6 +726,7 @@
     emptyHint.style.display = 'none';
 
     editNodeName.value = node.name;
+    editNodeColor.value = node.color || DEFAULT_NODE_COLOR;
 
     const others = state.nodes.filter(n => n.id !== node.id);
 
@@ -758,6 +789,13 @@
     node.name = editNodeName.value;
     renderGraph();
     renderEditNodePanel();
+  });
+
+  editNodeColor.addEventListener('input', () => {
+    const node = nodeById(selectedNodeId);
+    if (!node) return;
+    node.color = editNodeColor.value;
+    renderGraph();
   });
 
   addExistingConnBtn.addEventListener('click', () => {

@@ -6,10 +6,11 @@ A single-file HTML app for mapping out relationships between people as a node-an
 
 1. Open `index.html` in your browser.
 2. You start with one node ("You") in the middle of the canvas.
-3. **Relationship Types** (sidebar): add a type with a name and color (e.g. "Friend" / blue). These colors are used for the connection lines.
+3. **Relationship Types** (sidebar): add a type with a name and color (e.g. "Friend" / blue). These colors are used for the connection lines. Click an existing type's color swatch to change it.
 4. **Add Node** (sidebar): create a new person and connect them to one or more existing nodes, picking a relationship type for each connection.
 5. Click any node to open the **Edit Node** panel, where you can:
    - Rename the node
+   - Change the node's color
    - Add, change, or remove its connections
    - Delete the node (and all its connections)
 6. Drag nodes around the canvas to rearrange the graph.
